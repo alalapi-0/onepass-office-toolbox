@@ -46,4 +46,5 @@ htmlcov/
 sample_data/**
 !sample_data/
 !sample_data/**/
+!sample_data/fs_demo/**
 !sample_data/**/.gitkeep
