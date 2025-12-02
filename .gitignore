@@ -1,0 +1,49 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+.env/
+.envrc
+
+# Pytest and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+htmlcov/
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+
+# Jupyter and IPython
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Local data overrides
+*.local
+
+# Keep sample_data tracked but allow large data to be added later
+sample_data/**
+!sample_data/
+!sample_data/**/
+!sample_data/**/.gitkeep

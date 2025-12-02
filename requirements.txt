@@ -1,0 +1,5 @@
+# Pre-estimated dependencies for upcoming office tools; may be adjusted in future iterations
+pandas
+openpyxl
+chardet
+python-dotenv
