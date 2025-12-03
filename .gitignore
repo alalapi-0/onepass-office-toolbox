@@ -48,3 +48,4 @@ sample_data/**
 !sample_data/**/
 !sample_data/fs_demo/**
 !sample_data/**/.gitkeep
+!sample_data/list_demo/**

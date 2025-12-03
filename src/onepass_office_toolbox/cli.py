@@ -10,6 +10,7 @@ from textwrap import dedent
 
 from . import __version__
 from .fs_tools import organize_by_extension_main, rename_files_basic_main
+from .list_tools import dedup_filename_column_main, excel_to_filename_list_main
 
 
 TOOL_CATEGORIES = {
@@ -20,8 +21,8 @@ TOOL_CATEGORIES = {
     },
     "list": {
         "title": "list_tools",
-        "description": "Excel/List tools (coming soon)",
-        "details": "Excel/列表工具集合，后续补充批量处理脚本。",
+        "description": "Excel/List tools",
+        "details": "Excel/列表工具集合：包含列提取和去重分析。",
     },
     "report": {
         "title": "report_tools",
@@ -72,8 +73,25 @@ def build_parser() -> argparse.ArgumentParser:
     _register_fs_tools(fs_subparsers)
     fs_parser.set_defaults(func=_handle_fs_missing, _fs_parser=fs_parser)
 
+    list_parser = subparsers.add_parser(
+        "list",
+        help=TOOL_CATEGORIES["list"]["description"],
+        description=dedent(
+            f"""
+            {TOOL_CATEGORIES['list']['details']}
+
+            可用工具:
+            - excel-to-filenames: 从 Excel/CSV 某列生成干净文件名列表
+            - dedup-filename-column: 分析文件名列的重复情况并输出报告
+            """
+        ),
+    )
+    list_subparsers = list_parser.add_subparsers(dest="list_command", metavar="tool")
+    _register_list_tools(list_subparsers)
+    list_parser.set_defaults(func=_handle_list_missing, _list_parser=list_parser)
+
     for name, meta in TOOL_CATEGORIES.items():
-        if name == "fs":
+        if name in {"fs", "list"}:
             continue
         subparsers.add_parser(
             name,
@@ -107,6 +125,31 @@ def _register_fs_tools(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     )
     _add_organize_arguments(organize_parser)
     organize_parser.set_defaults(func=_dispatch_organize_ext)
+
+
+def _register_list_tools(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register available list tools as subcommands."""
+    from .list_tools import dedup_filename_column, excel_to_filename_list
+
+    excel_parent = excel_to_filename_list.build_parser(add_help=False)
+    excel_parser = subparsers.add_parser(
+        "excel-to-filenames",
+        parents=[excel_parent],
+        add_help=True,
+        help="从 Excel/CSV 某列生成干净文件名列表",
+        description=excel_parent.description,
+    )
+    excel_parser.set_defaults(func=_dispatch_excel_to_filenames)
+
+    dedup_parent = dedup_filename_column.build_parser(add_help=False)
+    dedup_parser = subparsers.add_parser(
+        "dedup-filename-column",
+        parents=[dedup_parent],
+        add_help=True,
+        help="分析文件名列的重复情况并输出报告",
+        description=dedup_parent.description,
+    )
+    dedup_parser.set_defaults(func=_dispatch_dedup_filename_column)
 
 
 def _add_rename_arguments(parser: argparse.ArgumentParser) -> None:
@@ -176,6 +219,15 @@ def _handle_fs_missing(args: argparse.Namespace) -> None:
         print("Please provide a specific fs tool. Use --help for options.")
 
 
+def _handle_list_missing(args: argparse.Namespace) -> None:
+    """Show help when list subcommand is missing."""
+    parser: argparse.ArgumentParser | None = getattr(args, "_list_parser", None)
+    if parser:
+        parser.print_help()
+    else:
+        print("Please provide a specific list tool. Use --help for options.")
+
+
 def _handle_placeholder(args: argparse.Namespace) -> None:
     """Handle stub subcommands by printing placeholder guidance."""
     meta = TOOL_CATEGORIES.get(args.command, {})
@@ -229,6 +281,44 @@ def _dispatch_organize_ext(args: argparse.Namespace) -> None:
         tool_args.append("--apply")
 
     organize_by_extension_main(tool_args)
+
+
+def _dispatch_excel_to_filenames(args: argparse.Namespace) -> None:
+    """Forward arguments to the excel_to_filename_list tool."""
+    tool_args: list[str] = ["--input", args.input, "--column", str(args.column)]
+    tool_args.extend(["--output", args.output, "--encoding", args.encoding])
+    if not args.strip_spaces:
+        tool_args.append("--no-strip-spaces")
+    if not args.drop_empty:
+        tool_args.append("--no-drop-empty")
+    if not args.unique:
+        tool_args.append("--no-unique")
+    if not args.keep_order:
+        tool_args.append("--no-keep-order")
+
+    excel_to_filename_list_main(tool_args)
+
+
+def _dispatch_dedup_filename_column(args: argparse.Namespace) -> None:
+    """Forward arguments to the dedup_filename_column tool."""
+    tool_args: list[str] = [
+        "--input",
+        args.input,
+        "--column",
+        str(args.column),
+        "--unique-output",
+        args.unique_output,
+        "--duplicates-output",
+        args.duplicates_output,
+        "--encoding",
+        args.encoding,
+    ]
+    if not args.strip_spaces:
+        tool_args.append("--no-strip-spaces")
+    if not args.drop_empty:
+        tool_args.append("--no-drop-empty")
+
+    dedup_filename_column_main(tool_args)
 
 
 def main(argv: list[str] | None = None) -> None:
