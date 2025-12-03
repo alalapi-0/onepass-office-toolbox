@@ -2,21 +2,21 @@
 
 This module exposes the entrypoint for the toolbox collection. The current
 version focuses on welcoming users and showcasing the planned tool categories.
-Future iterations will populate each subcommand with concrete utilities.
-"""
+Future iterations will populate each subcommand with concrete utilities."""
 from __future__ import annotations
 
 import argparse
 from textwrap import dedent
 
 from . import __version__
+from .fs_tools import organize_by_extension_main, rename_files_basic_main
 
 
 TOOL_CATEGORIES = {
     "fs": {
         "title": "fs_tools",
-        "description": "File system tools (coming soon)",
-        "details": "文件系统工具集合，具体工具将在后续轮次实现。",
+        "description": "File system tools",
+        "details": "文件系统工具集合：包含基础的重命名和按扩展名整理功能。",
     },
     "list": {
         "title": "list_tools",
@@ -55,7 +55,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", metavar="category")
 
+    fs_parser = subparsers.add_parser(
+        "fs",
+        help=TOOL_CATEGORIES["fs"]["description"],
+        description=dedent(
+            f"""
+            {TOOL_CATEGORIES['fs']['details']}
+
+            状态: 可用工具:
+            - rename-basic: 批量重命名文件（前缀/后缀/扩展名大小写）
+            - organize-ext: 按扩展名整理文件到子目录
+            """
+        ),
+    )
+    fs_subparsers = fs_parser.add_subparsers(dest="fs_command", metavar="tool")
+    _register_fs_tools(fs_subparsers)
+    fs_parser.set_defaults(func=_handle_fs_missing, _fs_parser=fs_parser)
+
     for name, meta in TOOL_CATEGORIES.items():
+        if name == "fs":
+            continue
         subparsers.add_parser(
             name,
             help=meta["description"],
@@ -69,6 +88,92 @@ def build_parser() -> argparse.ArgumentParser:
         ).set_defaults(func=_handle_placeholder)
 
     return parser
+
+
+def _register_fs_tools(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register available fs tools as subcommands."""
+    rename_parser = subparsers.add_parser(
+        "rename-basic",
+        help="批量重命名文件（前缀/后缀/扩展名大小写）",
+        description="Batch rename files with prefix/suffix and extension case normalization.",
+    )
+    _add_rename_arguments(rename_parser)
+    rename_parser.set_defaults(func=_dispatch_rename_basic)
+
+    organize_parser = subparsers.add_parser(
+        "organize-ext",
+        help="按扩展名整理文件到子目录",
+        description="Organize files into extension-named folders (dry-run by default).",
+    )
+    _add_organize_arguments(organize_parser)
+    organize_parser.set_defaults(func=_dispatch_organize_ext)
+
+
+def _add_rename_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach arguments shared with the rename_files_basic module."""
+    parser.add_argument("--dir", "-d", required=True, help="Target directory to process.")
+    parser.add_argument(
+        "--recursive",
+        "-r",
+        action="store_true",
+        help="Recurse into subdirectories when scanning for files.",
+    )
+    parser.add_argument("--prefix", help="Prefix to add before the file basename.")
+    parser.add_argument("--suffix", help="Suffix to add after the file basename.")
+    parser.add_argument(
+        "--lower-ext",
+        action="store_true",
+        help="Convert file extensions to lowercase (exclusive with --upper-ext).",
+    )
+    parser.add_argument(
+        "--upper-ext",
+        action="store_true",
+        help="Convert file extensions to uppercase (exclusive with --lower-ext).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only print planned renames without applying them (default behavior).",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the renames. If omitted, the command performs a dry-run.",
+    )
+
+
+def _add_organize_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach arguments shared with the organize_by_extension module."""
+    parser.add_argument("--dir", "-d", required=True, help="Directory to organize.")
+    parser.add_argument("--recursive", "-r", action="store_true", help="Recurse into subdirectories.")
+    parser.add_argument(
+        "--mode",
+        choices=["ext"],
+        default="ext",
+        help="Organization mode. Currently only 'ext' is supported.",
+    )
+    parser.add_argument(
+        "--target-root",
+        help=(
+            "Root directory where organized files will be placed. Defaults to the "
+            "source directory."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview planned moves without applying them (default behavior).",
+    )
+    parser.add_argument("--apply", action="store_true", help="Apply the moves instead of dry-run.")
+
+
+def _handle_fs_missing(args: argparse.Namespace) -> None:
+    """Show help when fs subcommand is missing."""
+    parser: argparse.ArgumentParser | None = getattr(args, "_fs_parser", None)
+    if parser:
+        parser.print_help()
+    else:
+        print("Please provide a specific fs tool. Use --help for options.")
 
 
 def _handle_placeholder(args: argparse.Namespace) -> None:
@@ -86,6 +191,44 @@ def _print_welcome() -> None:
     print("\nAvailable tool categories:")
     for meta in TOOL_CATEGORIES.values():
         print(f"- {meta['title']} – {meta['description']}")
+
+
+def _dispatch_rename_basic(args: argparse.Namespace) -> None:
+    """Forward parsed arguments to the rename_files_basic tool."""
+    tool_args: list[str] = ["--dir", args.dir]
+    if args.recursive:
+        tool_args.append("--recursive")
+    if args.prefix:
+        tool_args.extend(["--prefix", args.prefix])
+    if args.suffix:
+        tool_args.extend(["--suffix", args.suffix])
+    if args.lower_ext:
+        tool_args.append("--lower-ext")
+    if args.upper_ext:
+        tool_args.append("--upper-ext")
+    if args.dry_run:
+        tool_args.append("--dry-run")
+    if args.apply:
+        tool_args.append("--apply")
+
+    rename_files_basic_main(tool_args)
+
+
+def _dispatch_organize_ext(args: argparse.Namespace) -> None:
+    """Forward parsed arguments to the organize_by_extension tool."""
+    tool_args: list[str] = ["--dir", args.dir]
+    if args.recursive:
+        tool_args.append("--recursive")
+    if args.mode:
+        tool_args.extend(["--mode", args.mode])
+    if args.target_root:
+        tool_args.extend(["--target-root", args.target_root])
+    if args.dry_run:
+        tool_args.append("--dry-run")
+    if args.apply:
+        tool_args.append("--apply")
+
+    organize_by_extension_main(tool_args)
 
 
 def main(argv: list[str] | None = None) -> None:
